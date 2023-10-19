@@ -41,7 +41,6 @@ func main() {
 }
 
 func cicd(c *fiber.Ctx) error {
-	output := ""
 	data := make(map[string]any)
 	err := json.Unmarshal(c.Body(), &data)
 	if err != nil {
@@ -61,13 +60,12 @@ func cicd(c *fiber.Ctx) error {
 					log.Printf("cicd: error -> %v\n", err)
 					return err
 				}
-				log.Printf("cicd: " + string(odata))
-				output += string(odata) + "\n"
+				log.Printf("cicd: " + string(odata) + "\n")
 			}
 		}
 	}
 
-	return c.SendString(output)
+	return c.SendString("ok")
 }
 
 func logcicd(c *fiber.Ctx) error {

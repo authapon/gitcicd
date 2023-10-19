@@ -3,4 +3,5 @@ condition:
 - owner: "user"
   name: "repo"
   message: "deploy"
+  ref: "refs/heads/main"
   script: "/usr/local/bin/deploy.sh"

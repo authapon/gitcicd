@@ -15,6 +15,7 @@ type (
 		Owner   string   `json:"owner"`
 		Name    string   `json:"name"`
 		Message string   `json:"message"`
+		Ref     string   `json:"ref"`
 		Script  []string `json:"script"`
 	}
 	Conf struct {
@@ -50,9 +51,10 @@ func cicd(c *fiber.Ctx) error {
 	message := data["head_commit"].(map[string]any)["message"].(string)
 	name := data["repository"].(map[string]any)["name"].(string)
 	owner := data["repository"].(map[string]any)["owner"].(map[string]any)["name"].(string)
-	log.Printf("cicd: process owner:%s - name:%s - message:%s\n", owner, name, message)
+	ref := data["ref"].(string)
+	log.Printf("cicd: process owner:%s - name:%s - ref:%s - message:%s\n", owner, name, ref, message)
 	for i := range conf.Condition {
-		if owner == conf.Condition[i].Owner && name == conf.Condition[i].Name && message == conf.Condition[i].Message {
+		if owner == conf.Condition[i].Owner && name == conf.Condition[i].Name && message == conf.Condition[i].Message && ref == conf.Condition[i].Ref {
 			for i2 := range conf.Condition[i].Script {
 				odata, err := runCom(conf.Condition[i].Script[i2])
 				if err != nil {

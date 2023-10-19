@@ -1,0 +1,6 @@
+listen: ":4008"
+condition:
+- owner: "user"
+  name: "repo"
+  message: "deploy"
+  script: "/usr/local/bin/deploy.sh"

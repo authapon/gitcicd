@@ -1,0 +1,16 @@
+[Unit]
+Description=gitcicd service
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=authapon
+Group=authapon
+WorkingDirectory=/home/authapon/
+ExecStart=/usr/local/bin/gitcicd
+Restart=always
+Environment=USER=authapon HOME=/home/authapon
+
+[Install]
+WantedBy=multi-user.target

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"gopkg.in/yaml.v3"
@@ -12,11 +16,10 @@ import (
 
 type (
 	ConditionBuild struct {
-		Typex   string   `json:"type" yaml:"type"`
-		Owner   string   `json:"owner" yaml:"owner"`
-		Name    string   `json:"name" yaml:"name"`
+		Repo    string   `json:"repo" yaml:"repo"`
 		Message string   `json:"message" yaml:"message"`
 		Ref     string   `json:"ref" yaml:"ref"`
+		Secret  string   `json:"secret" yaml:"secret"`
 		Script  []string `json:"script" yaml:"script"`
 	}
 	Conf struct {
@@ -28,8 +31,8 @@ type (
 var conf Conf
 
 func main() {
+	log.Printf("cicd: Start gitcicd system.......\n\n\n")
 	processConfig()
-	log.Printf("cicd: %v\n", conf)
 	app := fiber.New(fiber.Config{
 		ProxyHeader:    fiber.HeaderXForwardedFor,
 		ReadBufferSize: 20480,
@@ -43,43 +46,53 @@ func main() {
 }
 
 func cicd(c *fiber.Ctx) error {
-	name := ""
-	owner := ""
+	repo := ""
 	ref := ""
 	message := ""
-	typex := ""
+	gittype := ""
+	secret := ""
 
 	log.Printf("cicd: start!!!\n")
 
 	data := make(map[string]any)
-	err := json.Unmarshal(c.Body(), &data)
+	body := c.Body()
+	header := c.GetReqHeaders()
+	err := json.Unmarshal(body, &data)
 	if err != nil {
 		log.Printf("cicd: error -> %v\n", err)
 		return err
 	}
-	owner, ok := data["user_username"].(string)
+	repo, ok := data["repository"].(map[string]any)["homepage"].(string)
 	if !ok {
-		typex = "github"
+		gittype = "github"
+		if len(header["X-Hub-Signature-256"]) > 0 {
+			secret = header["X-Hub-Signature-256"][0]
+		}
 		ref = data["ref"].(string)
-		name = data["repository"].(map[string]any)["name"].(string)
-		owner = data["repository"].(map[string]any)["owner"].(map[string]any)["name"].(string)
+		repo = data["repository"].(map[string]any)["html_url"].(string)
 		message = data["head_commit"].(map[string]any)["message"].(string)
 
 	} else {
-		typex = "gitlab"
+		gittype = "gitlab"
+		if len(header["X-Gitlab-Token"]) > 0 {
+			secret = header["X-Gitlab-Token"][0]
+		}
 		ref = data["ref"].(string)
-		name = data["repository"].(map[string]any)["name"].(string)
 		lx := len(data["commits"].([]any))
 		if lx > 0 {
 			message = data["commits"].([]any)[lx-1].(map[string]any)["title"].(string)
 		}
 	}
-
-	log.Printf("cicd: process type:%s - owner:%s - name:%s - ref:%s - message:%s\n", typex, owner, name, ref, message)
+	runx := false
+	log.Printf("cicd: process repo:%s - ref:%s\n", repo, ref)
 	for i := range conf.Condition {
-		log.Printf("cicd: test type:%s - owner:%s - name:%s - ref:%s - message:%s\n", conf.Condition[i].Typex, conf.Condition[i].Owner, conf.Condition[i].Name, conf.Condition[i].Ref, conf.Condition[i].Message)
-		if owner == conf.Condition[i].Owner && name == conf.Condition[i].Name && message == conf.Condition[i].Message && ref == conf.Condition[i].Ref && typex == conf.Condition[i].Typex {
+		if repo == conf.Condition[i].Repo && message == conf.Condition[i].Message && ref == conf.Condition[i].Ref {
 			log.Printf("cicd: activated!\n")
+			if !checksecret(body, conf.Condition[i].Secret, secret, gittype) {
+				log.Printf("cicd: secret error!!!\n")
+				return nil
+			}
+			runx = true
 			for i2 := range conf.Condition[i].Script {
 				log.Printf("cicd: exec %s\n", conf.Condition[i].Script[i2])
 				_, err := runCom(conf.Condition[i].Script[i2])
@@ -90,16 +103,28 @@ func cicd(c *fiber.Ctx) error {
 			}
 		}
 	}
-	log.Printf("cicd: finished\n")
+	if runx {
+		log.Printf("cicd: operation finished\n")
+	} else {
+		log.Printf("cicd: no operation!!")
+	}
 
 	return c.SendString("ok")
 }
 
 func logcicd(c *fiber.Ctx) error {
-	output, err := runCom("sudo", "systemctl", "status", "gitcicd", "-n", "100")
+	command := "sudo systemctl status gitcicd -n 100 | grep 'cicd:'"
+	output, err := runCom("bash", "-c", command)
 	if err != nil {
 		log.Printf("cicd: error -> %v \n", err)
 		return err
+	}
+	ostring := strings.Split(string(output), "\n")
+	if len(ostring) > 2 {
+		nstring := ostring[2:]
+		output = []byte(strings.Join(nstring, "\n"))
+	} else {
+		return c.SendString("")
 	}
 	return c.SendString(string(output))
 }
@@ -121,4 +146,21 @@ func runCom(c string, arg ...string) ([]byte, error) {
 	cmd := exec.Command(c, arg...)
 	data, err := cmd.Output()
 	return data, err
+}
+
+func checksecret(body []byte, confsecret string, headsecret string, gittype string) bool {
+	if confsecret == "" {
+		return false
+	}
+	switch gittype {
+	case "github":
+		key := hmac.New(sha256.New, []byte(confsecret))
+		key.Write(body)
+		computedSignature := "sha256=" + hex.EncodeToString(key.Sum(nil))
+		return computedSignature == headsecret
+	case "gitlab":
+		return confsecret == headsecret
+	default:
+		return false
+	}
 }

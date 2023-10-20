@@ -1,16 +1,14 @@
 listen: ":4008"
 condition:
-- type: "github"
-  owner: "user1"
-  name: "repo1"
+- repo: "https://github.com/user1/project1"
   message: "deploy"
   ref: "refs/heads/main"
+  secret: "secretme"
   script: 
   - "/usr/local/bin/deploy1.sh"
-- type: "gitlab"
-  owner: "user2"
-  name: "repo2"
+- repo: "https://gitlab.com/user2/project2"
   message: "deploy"
   ref: "refs/heads/main"
+  secret: "secretme"
   script: 
   - "/usr/local/bin/deploy2.sh"

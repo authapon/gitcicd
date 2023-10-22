@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 User=authapon
 Group=authapon
-WorkingDirectory=/home/authapon/
+WorkingDirectory=/home/authapon/gitcicd
 ExecStart=/usr/local/bin/gitcicd
 Restart=always
 Environment=USER=authapon HOME=/home/authapon

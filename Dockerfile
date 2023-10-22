@@ -7,6 +7,7 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -ldflags="-s -w" -o gitcicd .
 
 FROM scratch
+ADD ./template /template
 COPY --from=builder ["/build/gitcicd", "/"]
 EXPOSE 80
 

@@ -5,12 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"html/template"
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,12 +29,22 @@ type (
 	}
 )
 
-var conf Conf
+var (
+	conf Conf
+)
 
 func main() {
-	log.Printf("cicd: Start gitcicd system.......\n\n\n")
+	logs.AddLog("Start gitcicd system.......\n\n")
 	processConfig()
+	engine := html.New("./template", ".html")
+	engine.AddFunc(
+		// add unescape function
+		"unescape", func(s string) template.HTML {
+			return template.HTML(s)
+		},
+	)
 	app := fiber.New(fiber.Config{
+		Views:          engine,
 		ProxyHeader:    fiber.HeaderXForwardedFor,
 		ReadBufferSize: 20480,
 		BodyLimit:      104857600,
@@ -52,14 +63,14 @@ func cicd(c *fiber.Ctx) error {
 	gittype := ""
 	secret := ""
 
-	log.Printf("cicd: start!!!\n")
+	logs.AddLog("start!!!")
 
 	data := make(map[string]any)
 	body := c.Body()
 	header := c.GetReqHeaders()
 	err := json.Unmarshal(body, &data)
 	if err != nil {
-		log.Printf("cicd: error -> %v\n", err)
+		logs.AddLog("error -> %v", err)
 		return err
 	}
 	repo, ok := data["repository"].(map[string]any)["homepage"].(string)
@@ -68,65 +79,54 @@ func cicd(c *fiber.Ctx) error {
 		if len(header["X-Hub-Signature-256"]) > 0 {
 			secret = header["X-Hub-Signature-256"][0]
 		}
-		ref = data["ref"].(string)
-		repo = data["repository"].(map[string]any)["html_url"].(string)
-		message = data["head_commit"].(map[string]any)["message"].(string)
+		ref, _ = data["ref"].(string)
+		repo, _ = data["repository"].(map[string]any)["html_url"].(string)
+		message, _ = data["head_commit"].(map[string]any)["message"].(string)
 
 	} else {
 		gittype = "gitlab"
 		if len(header["X-Gitlab-Token"]) > 0 {
 			secret = header["X-Gitlab-Token"][0]
 		}
-		ref = data["ref"].(string)
+		ref, _ = data["ref"].(string)
 		lx := len(data["commits"].([]any))
 		if lx > 0 {
-			message = data["commits"].([]any)[lx-1].(map[string]any)["title"].(string)
+			message, _ = data["commits"].([]any)[lx-1].(map[string]any)["title"].(string)
 		}
 	}
 	runx := false
-	log.Printf("cicd: process repo:%s - ref:%s\n", repo, ref)
+	logs.AddLog("process repo:%s - ref:%s", repo, ref)
 	for i := range conf.Condition {
 		if repo == conf.Condition[i].Repo && message == conf.Condition[i].Message && ref == conf.Condition[i].Ref {
-			log.Printf("cicd: activated!\n")
+			logs.AddLog("activated!")
 			if !checksecret(body, conf.Condition[i].Secret, secret, gittype) {
-				log.Printf("cicd: secret error!!!\n")
+				logs.AddLog("secret error!!!")
 				return nil
 			}
 			runx = true
 			for i2 := range conf.Condition[i].Script {
-				log.Printf("cicd: exec %s\n", conf.Condition[i].Script[i2])
+				logs.AddLog("exec %s", conf.Condition[i].Script[i2])
 				_, err := runCom(conf.Condition[i].Script[i2])
 				if err != nil {
-					log.Printf("cicd: error -> %v\n", err)
+					logs.AddLog("error -> %v", err)
 					return err
 				}
 			}
 		}
 	}
 	if runx {
-		log.Printf("cicd: operation finished\n")
+		logs.AddLog("operation finished")
 	} else {
-		log.Printf("cicd: no operation!!")
+		logs.AddLog("no operation!!")
 	}
 
 	return c.SendString("ok")
 }
 
 func logcicd(c *fiber.Ctx) error {
-	command := "sudo systemctl status gitcicd -n 100 | grep 'cicd:'"
-	output, err := runCom("bash", "-c", command)
-	if err != nil {
-		log.Printf("cicd: error -> %v \n", err)
-		return err
-	}
-	ostring := strings.Split(string(output), "\n")
-	if len(ostring) > 2 {
-		nstring := ostring[2:]
-		output = []byte(strings.Join(nstring, "\n"))
-	} else {
-		return c.SendString("")
-	}
-	return c.SendString(string(output))
+	return c.Render("log", fiber.Map{
+		"Logs": logs.GetLogsHTML(),
+	})
 }
 
 func processConfig() {

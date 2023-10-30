@@ -76,6 +76,7 @@ func cicd(c *fiber.Ctx) error {
 	repo, ok := data["repository"].(map[string]any)["homepage"].(string)
 	if !ok {
 		gittype = "github"
+		logs.AddLog("Github")
 		if len(header["X-Hub-Signature-256"]) > 0 {
 			secret = header["X-Hub-Signature-256"][0]
 		}
@@ -85,6 +86,7 @@ func cicd(c *fiber.Ctx) error {
 
 	} else {
 		gittype = "gitlab"
+		logs.AddLog("Gitlab")
 		if len(header["X-Gitlab-Token"]) > 0 {
 			secret = header["X-Gitlab-Token"][0]
 		}

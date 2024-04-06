@@ -6,7 +6,6 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/gofiber/template/html/v2 v2.1.1
 	github.com/ruts48code/utils4ruts v0.0.0-20240327014149-65e8d90f196f
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (

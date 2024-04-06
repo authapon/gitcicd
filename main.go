@@ -7,25 +7,24 @@ import (
 	"encoding/json"
 	"html/template"
 	"log"
-	"os"
 	"os/exec"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
-	"gopkg.in/yaml.v3"
+	utils "github.com/ruts48code/utils4ruts"
 )
 
 type (
-	ConditionBuild struct {
-		Repo    string   `json:"repo" yaml:"repo"`
-		Message string   `json:"message" yaml:"message"`
-		Ref     string   `json:"ref" yaml:"ref"`
-		Secret  string   `json:"secret" yaml:"secret"`
-		Script  []string `json:"script" yaml:"script"`
+	RepoBuild struct {
+		Repo    string   `json:"repo" yaml:"repo" hcl:"repo,label"`
+		Branch  string   `json:"branch" yaml:"branch" hcl:"branch,label"`
+		Message string   `json:"message" yaml:"message" hcl:"message,label"`
+		Secret  string   `json:"secret" yaml:"secret" hcl:"secret"`
+		Script  []string `json:"script" yaml:"script" hcl:"script"`
 	}
 	Conf struct {
-		Listen    string           `json:"listen" yaml:"listen"`
-		Condition []ConditionBuild `json:"condition" yaml:"condition"`
+		Listen string      `json:"listen" yaml:"listen" hcl:"listen"`
+		Repo   []RepoBuild `json:"repo" yaml:"repo" hcl:"repo,block"`
 	}
 )
 
@@ -35,7 +34,6 @@ var (
 
 func main() {
 	logs.AddLog("Start gitcicd system.......\n\n")
-	processConfig()
 	engine := html.New("./template", ".html")
 	engine.AddFunc(
 		// add unescape function
@@ -56,7 +54,22 @@ func main() {
 	log.Fatal(app.Listen(conf.Listen))
 }
 
+func readConfig() {
+	if utils.FileExist("/etc/cicd.hcl") {
+		utils.ProcessConfigHCL("/etc/cicd.hcl", &conf)
+		log.Printf("Load /etc/cicd.hcl sucessfully\n")
+	} else if utils.FileExist("/etc/cicd.yml") {
+		utils.ProcessConfig("/etc/cicd.yml", &conf)
+		log.Printf("Load /etc/cicd.yml sucessfully\n")
+	} else {
+		log.Printf("Error: cannot load configurationfile\n")
+		return
+	}
+}
+
 func cicd(c *fiber.Ctx) error {
+	readConfig()
+
 	repo := ""
 	ref := ""
 	message := ""
@@ -98,17 +111,17 @@ func cicd(c *fiber.Ctx) error {
 	}
 	runx := false
 	logs.AddLog("process repo:%s - ref:%s", repo, ref)
-	for i := range conf.Condition {
-		if repo == conf.Condition[i].Repo && message == conf.Condition[i].Message && ref == conf.Condition[i].Ref {
+	for i := range conf.Repo {
+		if repo == conf.Repo[i].Repo && message == conf.Repo[i].Message && ref == "refs/heads/"+conf.Repo[i].Branch {
 			logs.AddLog("activated!")
-			if !checksecret(body, conf.Condition[i].Secret, secret, gittype) {
+			if !checksecret(body, conf.Repo[i].Secret, secret, gittype) {
 				logs.AddLog("secret error!!!")
 				return nil
 			}
 			runx = true
-			for i2 := range conf.Condition[i].Script {
-				logs.AddLog("exec %s", conf.Condition[i].Script[i2])
-				_, err := runCom(conf.Condition[i].Script[i2])
+			for i2 := range conf.Repo[i].Script {
+				logs.AddLog("exec %s", conf.Repo[i].Script[i2])
+				_, err := runCom(conf.Repo[i].Script[i2])
 				if err != nil {
 					logs.AddLog("error -> %v", err)
 					return err
@@ -129,19 +142,6 @@ func logcicd(c *fiber.Ctx) error {
 	return c.Render("log", fiber.Map{
 		"Logs": logs.GetLogsHTML(),
 	})
-}
-
-func processConfig() {
-	confdata := readFile("/etc/cicd.yml")
-	yaml.Unmarshal(confdata, &conf)
-}
-
-func readFile(f string) []byte {
-	content, err := os.ReadFile(f)
-	if err != nil {
-		return []byte("")
-	}
-	return content
 }
 
 func runCom(c string, arg ...string) ([]byte, error) {

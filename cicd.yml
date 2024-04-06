@@ -1,14 +1,14 @@
 listen: ":4008"
-condition:
+repo:
 - repo: "https://github.com/user1/project1"
+  branch: "main"
   message: "deploy"
-  ref: "refs/heads/main"
-  secret: "secretme"
+  secret: "secretme1"
   script: 
   - "/usr/local/bin/deploy1.sh"
 - repo: "https://gitlab.com/user2/project2"
+  branch: "main"
   message: "deploy"
-  ref: "refs/heads/main"
-  secret: "secretme"
+  secret: "secretme2"
   script: 
   - "/usr/local/bin/deploy2.sh"

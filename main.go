@@ -58,9 +58,11 @@ func readConfig() {
 	if utils.FileExist("/etc/cicd.hcl") {
 		utils.ProcessConfigHCL("/etc/cicd.hcl", &conf)
 		log.Printf("Load /etc/cicd.hcl sucessfully\n")
+		logs.AddLog("load hcl configuration successfull\n")
 	} else if utils.FileExist("/etc/cicd.yml") {
 		utils.ProcessConfig("/etc/cicd.yml", &conf)
 		log.Printf("Load /etc/cicd.yml sucessfully\n")
+		logs.AddLog("load yml configuration successfull\n")
 	} else {
 		log.Printf("Error: cannot load configurationfile\n")
 		return

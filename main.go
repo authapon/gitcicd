@@ -33,6 +33,7 @@ var (
 )
 
 func main() {
+	readConfig()
 	logs.AddLog("Start gitcicd system.......\n\n")
 	engine := html.New("./template", ".html")
 	engine.AddFunc(
